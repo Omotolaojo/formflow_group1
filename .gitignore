@@ -1,1 +1,65 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Build output
+dist/
+build/
+
+# Environment variables
 .env
+.env.*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+# Production environment files
+deployment/.env.production
+deployment/.env.production.backend
+deployment/.env.production.frontend
+
+frontend/.env.local
+backend/.env
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Prisma local databases
+*.db
+*.db-journal
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# TypeScript
+*.tsbuildinfo
+
+# Terraform
+
+/.terraform/*
+*.tfstate
+*.tfstate.*
+tfplan
+*.tfplan
+*.tfvars
+*.tfvars.json
+
+# ============================================================
+# Terraform local files
+# ============================================================
+
+crash.log
+crash.*.log
+
+/dist-seed/
