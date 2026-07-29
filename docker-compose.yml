@@ -42,7 +42,7 @@ services:
       postgres:
         condition: service_healthy
 
-        command: sh -c "npx prisma migrate deploy && npm start"
+    command: sh -c "npx prisma migrate deploy && npm start"
 
     environment:
       NODE_ENV: production
