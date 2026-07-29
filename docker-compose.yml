@@ -1,74 +1,83 @@
+version: "3.9"
+
 services:
 
   postgres:
     image: postgres:16-alpine
-    container_name: expense-postgres
+    container_name: expense-db
+
     restart: unless-stopped
 
-    env_file:
-      - .env.production
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+      POSTGRES_DB: expense_db
+
+    ports:
+      - "5432:5432"
 
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d expense_claims"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
 
     networks:
-      - expense
+      - expense-network
 
 
   backend:
-    image: kunzydev/expense-backend:${IMAGE_TAG}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
     container_name: expense-backend
+
     restart: unless-stopped
 
     depends_on:
       postgres:
         condition: service_healthy
 
-    env_file:
-      - .env.production
-      - .env.production.backend
+        command: sh -c "npx prisma migrate deploy && npm start"
+
+    environment:
+      NODE_ENV: production
+
+      DATABASE_URL: postgresql://postgres:postgres123@postgres:5432/expense_db
+
+      PORT: 5000
+
+    ports:
+      - "5000:5000"
 
     networks:
-      - expense
+      - expense-network
 
 
   frontend:
-    image: kunzydev/expense-frontend:${IMAGE_TAG}
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+
     container_name: expense-frontend
+
     restart: unless-stopped
 
     depends_on:
       - backend
 
-    env_file:
-      - .env.production
-      - .env.production.frontend
-
-    networks:
-      - expense
-
-
-  nginx:
-    image: kunzydev/expense-nginx:${IMAGE_TAG}
-    container_name: expense-nginx
-    restart: unless-stopped
-
-    depends_on:
-      - frontend
-      
-      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:5000
 
     ports:
-      - "80:80"
+      - "3000:3000"
 
     networks:
-      - expense
+      - expense-network
 
 
 volumes:
@@ -76,5 +85,7 @@ volumes:
 
 
 networks:
-  expense:
+  expense-network:
     driver: bridge
+
+    
