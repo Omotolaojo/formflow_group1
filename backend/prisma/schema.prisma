@@ -1,0 +1,50 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ClaimStatus {
+  pending
+  approved
+  rejected
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model User {
+  id       String @id @default(uuid())
+  name     String
+  email    String @unique
+  password String
+  role     Role   @default(USER)
+
+  claims Claim[]
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Claim {
+  id         String      @id @default(cuid())
+
+  vendor     String
+  amount     Float
+  date       DateTime
+
+  status     ClaimStatus @default(pending)
+
+  receiptUrl String?
+  extracted  Json?
+
+  userId     String?
+  user       User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime    @default(now())
+}

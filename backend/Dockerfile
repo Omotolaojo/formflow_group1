@@ -1,36 +1,64 @@
-# Stage 1: Build & Compile
-FROM node:20-alpine AS builder
-WORKDIR /usr/src/app
+# ============================================================
+# BUILD STAGE
+# ============================================================
 
-COPY package*.json tsconfig.json ./
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install all dependencies
 RUN npm ci
 
-COPY . .
-RUN npm run build
+# Copy TypeScript configuration
+COPY tsconfig.json ./
+COPY tsconfig.seed.json ./
 
-# Stage 2: Production Runtime
-FROM node:20-alpine AS runner
-WORKDIR /usr/src/app
+# Copy Prisma
+COPY prisma ./prisma
+
+# Copy application source
+COPY src ./src
+
+# Generate Prisma Client
+RUN npx prisma generate
+
+# Build backend and seed
+RUN npm run build:all
+
+
+# ============================================================
+# PRODUCTION STAGE
+# ============================================================
+
+FROM node:20-alpine AS production
+
+WORKDIR /app
 
 ENV NODE_ENV=production
 
 # Copy package files
 COPY package*.json ./
-RUN npm ci --only=production
 
-# ✅ Copy Prisma schema + migrations
-COPY --from=builder /usr/src/app/prisma ./prisma
+# Install production dependencies
+RUN npm ci --omit=dev
 
-# ✅ Copy compiled app
-COPY --from=builder /usr/src/app/dist ./dist
+# Copy compiled backend
+COPY --from=builder /app/dist ./dist
 
-# ✅ Generate Prisma client (VERY IMPORTANT)
-RUN npx prisma generate
+# Copy compiled seed
+COPY --from=builder /app/dist-seed ./dist-seed
 
-USER node
+# Copy Prisma schema
+COPY --from=builder /app/prisma/schema.prisma ./prisma/schema.prisma
 
-EXPOSE 5000
-ENV PORT=5000
+# Copy Prisma migrations
+COPY --from=builder /app/prisma/migrations ./prisma/migrations
 
-# ✅ Run migrations BEFORE starting server
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]
+# Copy Prisma generated client
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+
+# Run migrations → create admin → start API
+CMD ["sh", "-c", "set -e && npx prisma migrate deploy && node dist-seed/create_admin.js && node dist/server.js"]

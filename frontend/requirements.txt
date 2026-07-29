@@ -1,0 +1,30 @@
+npm install -D tailwindcss@3 postcss autoprefixer
+npm install daisyui
+npm install axios js-cookie react-hot-toast
+npm install @azure/ai-form-recognizer
+npm install prisma@6.19.3 @prisma/client@6.19.3
+npm install lucide-react
+npm install @azure/storage-blob
+
+Azure-AI-Document-Intelligence Api key
+Azure storage
+Azure blob container
+
+
+--------------------------
+
+clean cache
+
+rm -rf .next
+rm -rf node_modules
+rm package-lock.json
+npm install
+npx prisma generate
+npx prisma migrate dev // add new schema changes to db
+npm install next-themes
+npm install @tanstack/react-query
+npm install zustand
+
+npm install express cors dotenv @prisma/client @azure/ai-form-recognizer @azure/storage-blob
+npm install -D typescript tsx prisma @types/node @types/express @types/cors
+npx tsc --init
