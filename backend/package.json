@@ -2,7 +2,7 @@
   "name": "expense-claim-system-backend",
   "version": "1.0.0",
   "private": true,
- "scripts": {
+  "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "build:seed": "tsc -p tsconfig.seed.json",
@@ -26,7 +26,8 @@
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.3",
-    "multer": "^2.2.0"
+    "multer": "^2.2.0",
+    "prisma": "6.19.3"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",
@@ -35,7 +36,6 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.2.0",
     "@types/node": "^20",
-    "prisma": "^6.19.3",
     "tsx": "^4.22.4",
     "typescript": "^5"
   }
