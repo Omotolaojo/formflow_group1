@@ -53,6 +53,7 @@ tfplan
 *.tfplan
 *.tfvars
 *.tfvars.json
+.terraform.lock.hcl
 
 # ============================================================
 # Terraform local files
