@@ -11,14 +11,14 @@ export async function POST(
       await request.json();
 
     const apiUrl =
-      process.env.NEXT_PUBLIC_API_URL;
+      process.env.BACKEND_API_URL
 
     if (!apiUrl) {
       return NextResponse.json(
         {
           success: false,
           message:
-            "NEXT_PUBLIC_API_URL is not configured",
+            "API_URL is not configured",
         },
         {
           status: 500,
