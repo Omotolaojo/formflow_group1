@@ -1,0 +1,110 @@
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: captstone-db
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+      POSTGRES_DB: capstone_db
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d captstone_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - captstone-network
+
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+    container_name: captstone-backend
+    restart: unless-stopped
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    # command: sh -c "npx prisma migrate deploy && npm start"
+
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://postgres:postgres123@postgres:5432/captstone_db
+      JWT_SECRET: de27a0e9b4f5ff11842af66d82b7884e9e58a8b372
+      PORT: 5000
+
+    expose:
+      - "5000"
+
+    networks:
+      - captstone-network
+
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+
+      args:
+        NEXT_PUBLIC_API_URL: /api
+
+    container_name: captstone-frontend
+    restart: unless-stopped
+
+    depends_on:
+      - backend
+
+    environment:
+      NEXT_PUBLIC_API_URL: /api
+      BACKEND_API_URL: http://backend:5000/api
+
+    expose:
+      - "3000"
+
+    networks:
+      - captstone-network
+
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+
+    container_name: captstone-nginx
+    restart: unless-stopped
+
+    depends_on:
+      - frontend
+      - backend
+
+    ports:
+      - "80:80"
+
+    networks:
+      - captstone-network
+
+
+volumes:
+  postgres_data:
+
+
+networks:
+  captstone-network:
+    driver: bridge
+
+    # docker compose -f docker-compose.local.yml down
+    # docker compose -f docker-compose.local.yml build --no-cache backend
+    # docker compose -f docker-compose.local.yml up

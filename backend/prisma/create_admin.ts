@@ -24,21 +24,23 @@ async function main() {
    * update their role to ADMIN.
    */
   const admin = await prisma.user.upsert({
-    where: {
-      email,
-    },
+  where: {
+    email,
+  },
 
-    update: {
-      role: "ADMIN",
-    },
+  update: {
+    role: "ADMIN",
+    isActive: true,
+  },
 
-    create: {
-      name: "ClaimFlow Administrator",
-      email,
-      password: hashedPassword,
-      role: "ADMIN",
-    },
-  });
+  create: {
+    name: "ClaimFlow Administrator",
+    email,
+    password: hashedPassword,
+    role: "ADMIN",
+    isActive: true,
+  },
+});
 
   console.log(
     "========================================"

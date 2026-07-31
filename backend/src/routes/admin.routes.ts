@@ -11,6 +11,7 @@ import {
 import {
   getAllClaims,
   getPendingClaims,
+  updateClaimStatus,
 } from "../controllers/claims.controllers";
 
 import {
@@ -113,5 +114,14 @@ router.get(
   getPendingClaims
 );
 
+/**
+ * PATCH /api/admin/claims/:id
+ */
+router.patch(
+  "/claims/:id",
+  authenticateToken,
+  requireAdmin,
+  updateClaimStatus
+);
 
 export default router;

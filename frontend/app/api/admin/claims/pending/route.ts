@@ -8,30 +8,24 @@ export async function GET(
 ) {
   try {
     const apiUrl =
-      process.env.NEXT_PUBLIC_API_URL;
+      process.env.BACKEND_API_URL;
 
     if (!apiUrl) {
       console.error(
-        "NEXT_PUBLIC_API_URL is not configured"
+        "BACKEND_API_URL is not configured"
       );
 
       return NextResponse.json(
         {
           success: false,
           message:
-            "NEXT_PUBLIC_API_URL is not configured",
+            "BACKEND_API_URL is not configured",
         },
         {
           status: 500,
         }
       );
     }
-
-    /**
-     * ============================================================
-     * GET JWT FROM HTTP-ONLY COOKIE
-     * ============================================================
-     */
 
     const token =
       request.cookies.get("token")?.value;
@@ -53,26 +47,6 @@ export async function GET(
       );
     }
 
-    /**
-     * ============================================================
-     * EXPRESS BACKEND URL
-     * ============================================================
-     *
-     * Frontend:
-     *
-     * GET /api/admin/claims/pending
-     *
-     * Next.js proxy:
-     *
-     * GET ${apiUrl}/claims/pending
-     *
-     * Express:
-     *
-     * GET /api/claims/pending
-     *
-     * ============================================================
-     */
-
     const backendUrl =
       `${apiUrl}/claims/pending`;
 
@@ -81,12 +55,6 @@ export async function GET(
       backendUrl
     );
 
-    /**
-     * ============================================================
-     * FORWARD REQUEST TO EXPRESS
-     * ============================================================
-     */
-
     const response =
       await fetch(
         backendUrl,
@@ -94,10 +62,6 @@ export async function GET(
           method: "GET",
 
           headers: {
-            /**
-             * Forward JWT cookie
-             * to Express backend.
-             */
             Cookie:
               `token=${token}`,
           },
@@ -105,12 +69,6 @@ export async function GET(
           cache: "no-store",
         }
       );
-
-    /**
-     * ============================================================
-     * READ RESPONSE
-     * ============================================================
-     */
 
     const responseText =
       await response.text();
@@ -125,12 +83,6 @@ export async function GET(
           responseText,
       }
     );
-
-    /**
-     * ============================================================
-     * PARSE JSON
-     * ============================================================
-     */
 
     let data: unknown = {};
 
@@ -158,12 +110,6 @@ export async function GET(
         }
       );
     }
-
-    /**
-     * ============================================================
-     * RETURN EXPRESS RESPONSE
-     * ============================================================
-     */
 
     return NextResponse.json(
       data,
