@@ -6,11 +6,13 @@ import claimsRoutes from "./routes/claims.routes";
 import approveRoutes from "./routes/approve.routes";
 import processRoutes from "./routes/process.routes";
 import authRoutes from "./routes/auth.routes";
+import adminRoutes from "./routes/admin.routes";
 
 const app = express();
 
 const allowedOrigins = [
   "http://localhost:3000",
+  "http://localhost",
   // "https://expense-tracker-system-six.vercel.app",
   // "https://expense-tracker-system-f5iyltu3d-jaysoftys-projects.vercel.app",
 ];
@@ -84,6 +86,11 @@ app.use(
 app.use(
   "/api/claims",
   claimsRoutes
+);
+
+app.use(
+  "/api/admin",
+  adminRoutes
 );
 
 app.use(

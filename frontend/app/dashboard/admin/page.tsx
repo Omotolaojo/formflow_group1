@@ -19,7 +19,7 @@ export default function AdminPage() {
    */
 
 
-  const [selectedClaim, setSelectedClaim] = useState<Claim | null>(null);
+  // const [selectedClaim, setSelectedClaim] = useState<Claim | null>(null);
 
   /**
    * ============================================================
@@ -83,91 +83,72 @@ export default function AdminPage() {
    * ============================================================
    */
 
-  const updateStatus = async (
-    id: string,
-    status: Claim["status"],
-  ) => {
-    setLoadingAction({
-      id,
-      status,
-    });
+const updateStatus = async (
+  id: string,
+  status: Claim["status"],
+) => {
+  setLoadingAction({
+    id,
+    status,
+  });
 
-    try {
-      const res = await fetch(
-        `/admin/claims/${id}`,
-        {
-          method: "PATCH",
+  try {
+    const res = await fetch(
+      `/api/admin/claims/${id}`,
+      {
+        method: "PATCH",
 
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-
-          body: JSON.stringify({
-            status:
-              status.toLowerCase(),
-          }),
+        headers: {
+          "Content-Type": "application/json",
         },
+
+        body: JSON.stringify({
+          status: status.toLowerCase(),
+        }),
+      },
+    );
+
+    const data = await res.json();
+
+    console.log(
+      "Claim status update response:",
+      data,
+    );
+
+    if (!res.ok) {
+      throw new Error(
+        data.message ||
+          data.error ||
+          `Failed to update claim. Status: ${res.status}`,
       );
-
-      const data =
-        await res.json();
-
-      console.log(
-        "Claim status update response:",
-        data,
-      );
-
-      if (!res.ok) {
-        throw new Error(
-          data.message ||
-            `Failed to update claim. Status: ${res.status}`,
-        );
-      }
-
-      /**
-       * Remove the claim from
-       * the pending admin list.
-       */
-
-      setClaims(
-        (prev) =>
-          prev.filter(
-            (claim) =>
-              claim.id !== id,
-          ),
-      );
-
-      /**
-       * Close receipt preview
-       * if the admin approved/rejected
-       * the currently viewed claim.
-       */
-
-      if (
-        selectedClaim?.id === id
-      ) {
-
-      }
-
-      toast.success(
-        `Claim ${status} successfully`,
-      );
-    } catch (error) {
-      console.error(
-        "Failed to update claim:",
-        error,
-      );
-
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Action failed. Try again.",
-      );
-    } finally {
-      setLoadingAction(null);
     }
-  };
+
+    setClaims(
+      (prev) =>
+        prev.filter(
+          (claim) =>
+            claim.id !== id,
+        ),
+    );
+
+    toast.success(
+      `Claim ${status} successfully`,
+    );
+  } catch (error) {
+    console.error(
+      "Failed to update claim:",
+      error,
+    );
+
+    toast.error(
+      error instanceof Error
+        ? error.message
+        : "Action failed. Try again.",
+    );
+  } finally {
+    setLoadingAction(null);
+  }
+};
 
   return (
     <div className="p-6">
@@ -218,9 +199,9 @@ export default function AdminPage() {
                   {/* CLAIM SUBMITTER */}
 
                   <div className="rounded-lg bg-base-200 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-base-content/50">
+                    {/* <p className="text-xs font-semibold uppercase tracking-wide text-base-content/50">
                       Submitted By
-                    </p>
+                    </p> */}
 
                     <p className="mt-1 font-semibold">
                       {c.user?.name ||
