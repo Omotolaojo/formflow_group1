@@ -52,12 +52,16 @@ Thumbs.db
 tfplan
 *.tfplan
 *.tfvars
+!*.tfvars.example
 *.tfvars.json
 .terraform.lock.hcl
 
 # ============================================================
 # Terraform local files
 # ============================================================
+
+*.pem
+*.pub
 
 crash.log
 crash.*.log
