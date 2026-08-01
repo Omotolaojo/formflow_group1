@@ -45,19 +45,23 @@ Thumbs.db
 *.tsbuildinfo
 
 # Terraform
-
-/.terraform/*
+.terraform/
+/.terraform
 *.tfstate
 *.tfstate.*
 tfplan
 *.tfplan
 *.tfvars
+!*.tfvars.example
 *.tfvars.json
 .terraform.lock.hcl
 
 # ============================================================
 # Terraform local files
 # ============================================================
+
+*.pem
+*.pub
 
 crash.log
 crash.*.log
