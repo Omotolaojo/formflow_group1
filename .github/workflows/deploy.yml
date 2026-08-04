@@ -5,6 +5,10 @@ on:
         tags:
             - "v*.*.*" # Only runs on version tags (v1.0.0, v1.2.3, etc.)
     workflow_dispatch:
+        inputs:
+            version:
+                description: "Release version"
+                required: true
 
 permissions:
     contents: read
