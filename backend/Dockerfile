@@ -43,7 +43,9 @@ ENV NODE_ENV=production
 COPY package*.json ./
 
 # Install production dependencies
-RUN npm ci --omit=dev
+# RUN npm ci --omit=dev 
+
+COPY --from=builder /app/node_modules ./node_modules
 
 # Copy compiled backend
 COPY --from=builder /app/dist ./dist
