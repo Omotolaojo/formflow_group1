@@ -57,7 +57,7 @@ COPY --from=builder /app/dist-seed ./dist-seed
 COPY --from=builder /app/prisma/schema.prisma ./prisma/schema.prisma
 
 # Copy Prisma migrations
-COPY --from=builder /app/prisma/migrations ./prisma/migrations
+# COPY --from=builder /app/prisma/migrations ./prisma/migrations
 
 # Copy Prisma generated client
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
