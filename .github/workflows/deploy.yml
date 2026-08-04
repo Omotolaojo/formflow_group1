@@ -1,213 +1,328 @@
-name: Deploy FormFlow to Azure
+name: Deploy FormFlow (SemVer)
 
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:
+    push:
+        tags:
+            - "v*.*.*" # Only runs on version tags (v1.0.0, v1.2.3, etc.)
+    workflow_dispatch:
 
 permissions:
-  contents: read
-  id-token: write
+    contents: read
 
 concurrency:
-  group: formflow-production
-  cancel-in-progress: false
+    group: formflow-production
+    cancel-in-progress: false
 
 env:
-  TF_WORKING_DIR: Infrastructure/terraform
-  TF_IN_AUTOMATION: "true"
-  AZURE_CORE_OUTPUT: none
+    FRONTEND_IMAGE: ${{ secrets.DOCKER_USERNAME }}/formflow-frontend
+    BACKEND_IMAGE: ${{ secrets.DOCKER_USERNAME }}/formflow-backend
 
 jobs:
-  deploy:
-    name: Provision and deploy
-    runs-on: ubuntu-latest
-    environment: production
-    timeout-minutes: 45
-    env:
-      ARM_USE_OIDC: "true"
-      ARM_USE_AZUREAD: "true"
-      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      TF_VAR_ssh_public_key: ${{ secrets.VM_SSH_PUBLIC_KEY }}
-      TF_VAR_project_name: ${{ vars.PROJECT_NAME || 'formflow' }}
-      TF_VAR_environment: prod
-      TF_VAR_location: ${{ vars.AZURE_LOCATION || 'uksouth' }}
-      TF_VAR_vm_size: ${{ vars.VM_SIZE || 'Standard_B2s' }}
-      TF_VAR_admin_username: ${{ vars.VM_USERNAME || 'formflowadmin' }}
+    deploy:
+        name: Build, Push & Deploy
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
 
-    steps:
-      - name: Check out exact commit
-        uses: actions/checkout@v4
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
 
-      - name: Log in to Azure with OIDC
-        uses: azure/login@v3
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+            # -------------------------------------------------
+            # Extract version from Git tag (v1.2.3 → 1.2.3)
+            # -------------------------------------------------
+            - name: Get version from tag
+              id: version
+              run: |
+                  if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+                    VERSION=${GITHUB_REF#refs/tags/v}
+                  else
+                    VERSION="0.0.0-${GITHUB_SHA::7}"
+                  fi
+                  echo "version=$VERSION" >> $GITHUB_OUTPUT
+                  echo "Deploying version: $VERSION"
 
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.9.8
-          terraform_wrapper: false
+            # -------------------------------------------------
+            # Login to Docker Hub
+            # -------------------------------------------------
+            - name: Login to Docker Hub
+              uses: docker/login-action@v3
+              with:
+                  username: ${{ secrets.DOCKER_USERNAME }}
+                  password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Terraform format
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform fmt -check -recursive
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
 
-      - name: Terraform init
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: |
-          terraform init -input=false \
-            -backend-config="resource_group_name=${{ vars.TF_STATE_RESOURCE_GROUP }}" \
-            -backend-config="storage_account_name=${{ vars.TF_STATE_STORAGE_ACCOUNT }}" \
-            -backend-config="container_name=${{ vars.TF_STATE_CONTAINER || 'tfstate' }}" \
-            -backend-config="key=${{ vars.TF_STATE_KEY || 'formflow-prod.tfstate' }}" \
-            -backend-config="use_oidc=true" \
-            -backend-config="use_azuread_auth=true" \
-            -backend-config="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
-            -backend-config="client_id=${{ secrets.AZURE_CLIENT_ID }}" \
-            -backend-config="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+            # -------------------------------------------------
+            # Build & Push Backend
+            # -------------------------------------------------
+            - name: Build & Push Backend
+              uses: docker/build-push-action@v6
+              with:
+                  context: ./backend
+                  file: ./backend/Dockerfile
+                  push: true
+                  tags: ${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.version }}
+                  cache-from: type=gha
+                  cache-to: type=gha,mode=max
 
-      - name: Terraform validate
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform validate
+            # -------------------------------------------------
+            # Build & Push Frontend
+            # -------------------------------------------------
+            - name: Build & Push Frontend
+              uses: docker/build-push-action@v6
+              with:
+                  context: ./frontend
+                  file: ./frontend/Dockerfile
+                  push: true
+                  tags: ${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.version }}
+                  build-args: |
+                      NEXT_PUBLIC_API_URL=http://${{ secrets.VM_HOST }}
+                  cache-from: type=gha
+                  cache-to: type=gha,mode=max
 
-      - name: Terraform plan
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform plan -input=false -out=tfplan
+            # -------------------------------------------------
+            # Deploy to the Linux VM
+            # -------------------------------------------------
+            - name: Deploy to VM via SSH
+              uses: appleboy/ssh-action@v1.2.0
+              with:
+                  host: ${{ secrets.VM_HOST }}
+                  username: ${{ secrets.VM_USER }}
+                  key: ${{ secrets.VM_SSH_KEY }}
+                  script: |
+                      set -e
+                      cd /opt/formflow
 
-      - name: Terraform apply
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform apply -input=false -auto-approve tfplan
+                      # Update image tags to the new version
+                      sed -i "s|formflow-backend:.*|formflow-backend:${{ steps.version.outputs.version }}|g" docker-compose.yml
+                      sed -i "s|formflow-frontend:.*|formflow-frontend:${{ steps.version.outputs.version }}|g" docker-compose.yml
 
-      - name: Read deployment outputs
-        id: infra
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "vm_ip=$(terraform output -raw vm_public_ip)" >> "$GITHUB_OUTPUT"
-          echo "resource_group=$(terraform output -raw resource_group_name)" >> "$GITHUB_OUTPUT"
-          echo "nsg_name=$(terraform output -raw network_security_group_name)" >> "$GITHUB_OUTPUT"
-          echo "vm_name=$(terraform output -raw vm_name)" >> "$GITHUB_OUTPUT"
-          echo "vm_username=$(terraform output -raw admin_username)" >> "$GITHUB_OUTPUT"
+                      # Login to Docker Hub so we can pull the images
+                      echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
-      - name: Open temporary SSH access for this runner
-        id: ssh_rule
-        shell: bash
-        run: |
-          set -euo pipefail
-          RUNNER_IP="$(curl --fail --silent --show-error https://api.ipify.org)"
-          RULE_NAME="Allow-GHA-SSH-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          az network nsg rule create \
-            --resource-group "${{ steps.infra.outputs.resource_group }}" \
-            --nsg-name "${{ steps.infra.outputs.nsg_name }}" \
-            --name "$RULE_NAME" \
-            --priority 100 \
-            --direction Inbound \
-            --access Allow \
-            --protocol Tcp \
-            --source-address-prefixes "${RUNNER_IP}/32" \
-            --source-port-ranges '*' \
-            --destination-address-prefixes '*' \
-            --destination-port-ranges 22
-          echo "rule_name=$RULE_NAME" >> "$GITHUB_OUTPUT"
+                      # Pull the exact versioned images and restart
+                      docker compose pull
+                      docker compose up -d
 
-      - name: Configure SSH key
-        shell: bash
-        env:
-          DEPLOY_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
-        run: |
-          set -euo pipefail
-          install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/formflow"
-          chmod 600 "$HOME/.ssh/formflow"
+                      # Show what is running
+                      echo "----- Running containers -----"
+                      docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
 
-      - name: Wait for SSH and cloud-init
-        shell: bash
-        run: |
-          set -euo pipefail
-          for attempt in $(seq 1 40); do
-            if ssh -i "$HOME/.ssh/formflow" \
-              -o BatchMode=yes \
-              -o ConnectTimeout=10 \
-              -o StrictHostKeyChecking=accept-new \
-              "${{ steps.infra.outputs.vm_username }}@${{ steps.infra.outputs.vm_ip }}" \
-              'sudo cloud-init status --wait && test -d /opt/formflow'; then
-              exit 0
-            fi
-            sleep 10
-          done
-          echo "The VM did not become ready for SSH." >&2
-          exit 1
+#=================================================================================================
+#THIS FILE BELOW IS DEPRECATED. A different deployment workflow is now used for `deploy.yml`
+#==================================================================================================
 
-      - name: Render protected deployment environment
-        shell: bash
-        env:
-          DEPLOYMENT_DIR: deployment
-          PUBLIC_BASE_URL: http://${{ steps.infra.outputs.vm_ip }}
-          POSTGRES_USER: formflow
-          POSTGRES_DB: formflow
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          ADMIN_NAME: ${{ vars.ADMIN_NAME || 'FormFlow Administrator' }}
-          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-          AZURE_ENDPOINT: ${{ secrets.APP_AZURE_ENDPOINT }}
-          AZURE_API_KEY: ${{ secrets.APP_AZURE_API_KEY }}
-          AZURE_STORAGE_ACCOUNT_NAME: ${{ secrets.APP_AZURE_STORAGE_ACCOUNT_NAME }}
-          AZURE_STORAGE_ACCOUNT_KEY: ${{ secrets.APP_AZURE_STORAGE_ACCOUNT_KEY }}
-          AZURE_STORAGE_CONTAINER_NAME: ${{ vars.APP_AZURE_STORAGE_CONTAINER_NAME || 'receipts' }}
-        run: python3 scripts/render-production-env.py
+# name: Deploy FormFlow to Azure
 
-      - name: Copy application to VM
-        shell: bash
-        run: |
-          set -euo pipefail
-          rsync -az --delete \
-            --exclude='.git/' \
-            --exclude='**/node_modules/' \
-            --exclude='**/.next/' \
-            --exclude='**/dist/' \
-            --exclude='Infrastructure/terraform/.terraform/' \
-            --exclude='Infrastructure/terraform/tfplan' \
-            -e "ssh -i $HOME/.ssh/formflow -o StrictHostKeyChecking=accept-new" \
-            ./ "${{ steps.infra.outputs.vm_username }}@${{ steps.infra.outputs.vm_ip }}:/opt/formflow/"
+# on:
+#   push:
+#     branches: [main]
+#   workflow_dispatch:
 
-      - name: Build and start application on VM
-        shell: bash
-        run: |
-          set -euo pipefail
-          ssh -i "$HOME/.ssh/formflow" \
-            -o StrictHostKeyChecking=accept-new \
-            "${{ steps.infra.outputs.vm_username }}@${{ steps.infra.outputs.vm_ip }}" \
-            'cd /opt/formflow && bash scripts/deploy-on-vm.sh'
+# permissions:
+#   contents: read
+#   id-token: write
 
-      - name: Verify public deployment
-        shell: bash
-        run: |
-          set -euo pipefail
-          BASE_URL="http://${{ steps.infra.outputs.vm_ip }}"
-          curl --fail --show-error --silent --retry 12 --retry-delay 5 "$BASE_URL/healthz"
-          curl --fail --show-error --silent --retry 12 --retry-delay 5 "$BASE_URL/api/health"
-          curl --fail --show-error --silent --retry 12 --retry-delay 5 "$BASE_URL/" >/dev/null
-          echo "Deployment verified at $BASE_URL"
+# concurrency:
+#   group: formflow-production
+#   cancel-in-progress: false
 
-      - name: Remove temporary SSH rule
-        if: always() && steps.ssh_rule.outputs.rule_name != ''
-        shell: bash
-        run: |
-          az network nsg rule delete \
-            --resource-group "${{ steps.infra.outputs.resource_group }}" \
-            --nsg-name "${{ steps.infra.outputs.nsg_name }}" \
-            --name "${{ steps.ssh_rule.outputs.rule_name }}" || true
+# env:
+#   TF_WORKING_DIR: Infrastructure/terraform
+#   TF_IN_AUTOMATION: "true"
+#   AZURE_CORE_OUTPUT: none
 
-      - name: Remove local private key
-        if: always()
-        shell: bash
-        run: rm -f "$HOME/.ssh/formflow"
+# jobs:
+#   deploy:
+#     name: Provision and deploy
+#     runs-on: ubuntu-latest
+#     environment: production
+#     timeout-minutes: 45
+#     env:
+#       ARM_USE_OIDC: "true"
+#       ARM_USE_AZUREAD: "true"
+#       ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+#       ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+#       ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+#       TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+#       TF_VAR_ssh_public_key: ${{ secrets.VM_SSH_PUBLIC_KEY }}
+#       TF_VAR_project_name: ${{ vars.PROJECT_NAME || 'formflow' }}
+#       TF_VAR_environment: prod
+#       TF_VAR_location: ${{ vars.AZURE_LOCATION || 'uksouth' }}
+#       TF_VAR_vm_size: ${{ vars.VM_SIZE || 'Standard_B2s' }}
+#       TF_VAR_admin_username: ${{ vars.VM_USERNAME || 'formflowadmin' }}
+
+#     steps:
+#       - name: Check out exact commit
+#         uses: actions/checkout@v4
+
+#       - name: Log in to Azure with OIDC
+#         uses: azure/login@v3
+#         with:
+#           client-id: ${{ secrets.AZURE_CLIENT_ID }}
+#           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+#           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+#       - name: Set up Terraform
+#         uses: hashicorp/setup-terraform@v3
+#         with:
+#           terraform_version: 1.9.8
+#           terraform_wrapper: false
+
+#       - name: Terraform format
+#         working-directory: ${{ env.TF_WORKING_DIR }}
+#         run: terraform fmt -check -recursive
+
+#       - name: Terraform init
+#         working-directory: ${{ env.TF_WORKING_DIR }}
+#         run: |
+#           terraform init -input=false \
+#             -backend-config="resource_group_name=${{ vars.TF_STATE_RESOURCE_GROUP }}" \
+#             -backend-config="storage_account_name=${{ vars.TF_STATE_STORAGE_ACCOUNT }}" \
+#             -backend-config="container_name=${{ vars.TF_STATE_CONTAINER || 'tfstate' }}" \
+#             -backend-config="key=${{ vars.TF_STATE_KEY || 'formflow-prod.tfstate' }}" \
+#             -backend-config="use_oidc=true" \
+#             -backend-config="use_azuread_auth=true" \
+#             -backend-config="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
+#             -backend-config="client_id=${{ secrets.AZURE_CLIENT_ID }}" \
+#             -backend-config="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+
+#       - name: Terraform validate
+#         working-directory: ${{ env.TF_WORKING_DIR }}
+#         run: terraform validate
+
+#       - name: Terraform plan
+#         working-directory: ${{ env.TF_WORKING_DIR }}
+#         run: terraform plan -input=false -out=tfplan
+
+#       - name: Terraform apply
+#         working-directory: ${{ env.TF_WORKING_DIR }}
+#         run: terraform apply -input=false -auto-approve tfplan
+
+#       - name: Read deployment outputs
+#         id: infra
+#         working-directory: ${{ env.TF_WORKING_DIR }}
+#         shell: bash
+#         run: |
+#           set -euo pipefail
+#           echo "vm_ip=$(terraform output -raw vm_public_ip)" >> "$GITHUB_OUTPUT"
+#           echo "resource_group=$(terraform output -raw resource_group_name)" >> "$GITHUB_OUTPUT"
+#           echo "nsg_name=$(terraform output -raw network_security_group_name)" >> "$GITHUB_OUTPUT"
+#           echo "vm_name=$(terraform output -raw vm_name)" >> "$GITHUB_OUTPUT"
+#           echo "vm_username=$(terraform output -raw admin_username)" >> "$GITHUB_OUTPUT"
+
+#       - name: Open temporary SSH access for this runner
+#         id: ssh_rule
+#         shell: bash
+#         run: |
+#           set -euo pipefail
+#           RUNNER_IP="$(curl --fail --silent --show-error https://api.ipify.org)"
+#           RULE_NAME="Allow-GHA-SSH-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+#           az network nsg rule create \
+#             --resource-group "${{ steps.infra.outputs.resource_group }}" \
+#             --nsg-name "${{ steps.infra.outputs.nsg_name }}" \
+#             --name "$RULE_NAME" \
+#             --priority 100 \
+#             --direction Inbound \
+#             --access Allow \
+#             --protocol Tcp \
+#             --source-address-prefixes "${RUNNER_IP}/32" \
+#             --source-port-ranges '*' \
+#             --destination-address-prefixes '*' \
+#             --destination-port-ranges 22
+#           echo "rule_name=$RULE_NAME" >> "$GITHUB_OUTPUT"
+
+#       - name: Configure SSH key
+#         shell: bash
+#         env:
+#           DEPLOY_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+#         run: |
+#           set -euo pipefail
+#           install -m 700 -d "$HOME/.ssh"
+#           printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/formflow"
+#           chmod 600 "$HOME/.ssh/formflow"
+
+#       - name: Wait for SSH and cloud-init
+#         shell: bash
+#         run: |
+#           set -euo pipefail
+#           for attempt in $(seq 1 40); do
+#             if ssh -i "$HOME/.ssh/formflow" \
+#               -o BatchMode=yes \
+#               -o ConnectTimeout=10 \
+#               -o StrictHostKeyChecking=accept-new \
+#               "${{ steps.infra.outputs.vm_username }}@${{ steps.infra.outputs.vm_ip }}" \
+#               'sudo cloud-init status --wait && test -d /opt/formflow'; then
+#               exit 0
+#             fi
+#             sleep 10
+#           done
+#           echo "The VM did not become ready for SSH." >&2
+#           exit 1
+
+#       - name: Render protected deployment environment
+#         shell: bash
+#         env:
+#           DEPLOYMENT_DIR: deployment
+#           PUBLIC_BASE_URL: http://${{ steps.infra.outputs.vm_ip }}
+#           POSTGRES_USER: formflow
+#           POSTGRES_DB: formflow
+#           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+#           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+#           ADMIN_NAME: ${{ vars.ADMIN_NAME || 'FormFlow Administrator' }}
+#           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+#           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+#           AZURE_ENDPOINT: ${{ secrets.APP_AZURE_ENDPOINT }}
+#           AZURE_API_KEY: ${{ secrets.APP_AZURE_API_KEY }}
+#           AZURE_STORAGE_ACCOUNT_NAME: ${{ secrets.APP_AZURE_STORAGE_ACCOUNT_NAME }}
+#           AZURE_STORAGE_ACCOUNT_KEY: ${{ secrets.APP_AZURE_STORAGE_ACCOUNT_KEY }}
+#           AZURE_STORAGE_CONTAINER_NAME: ${{ vars.APP_AZURE_STORAGE_CONTAINER_NAME || 'receipts' }}
+#         run: python3 scripts/render-production-env.py
+
+#       - name: Copy application to VM
+#         shell: bash
+#         run: |
+#           set -euo pipefail
+#           rsync -az --delete \
+#             --exclude='.git/' \
+#             --exclude='**/node_modules/' \
+#             --exclude='**/.next/' \
+#             --exclude='**/dist/' \
+#             --exclude='Infrastructure/terraform/.terraform/' \
+#             --exclude='Infrastructure/terraform/tfplan' \
+#             -e "ssh -i $HOME/.ssh/formflow -o StrictHostKeyChecking=accept-new" \
+#             ./ "${{ steps.infra.outputs.vm_username }}@${{ steps.infra.outputs.vm_ip }}:/opt/formflow/"
+
+#       - name: Build and start application on VM
+#         shell: bash
+#         run: |
+#           set -euo pipefail
+#           ssh -i "$HOME/.ssh/formflow" \
+#             -o StrictHostKeyChecking=accept-new \
+#             "${{ steps.infra.outputs.vm_username }}@${{ steps.infra.outputs.vm_ip }}" \
+#             'cd /opt/formflow && bash scripts/deploy-on-vm.sh'
+
+#       - name: Verify public deployment
+#         shell: bash
+#         run: |
+#           set -euo pipefail
+#           BASE_URL="http://${{ steps.infra.outputs.vm_ip }}"
+#           curl --fail --show-error --silent --retry 12 --retry-delay 5 "$BASE_URL/healthz"
+#           curl --fail --show-error --silent --retry 12 --retry-delay 5 "$BASE_URL/api/health"
+#           curl --fail --show-error --silent --retry 12 --retry-delay 5 "$BASE_URL/" >/dev/null
+#           echo "Deployment verified at $BASE_URL"
+
+#       - name: Remove temporary SSH rule
+#         if: always() && steps.ssh_rule.outputs.rule_name != ''
+#         shell: bash
+#         run: |
+#           az network nsg rule delete \
+#             --resource-group "${{ steps.infra.outputs.resource_group }}" \
+#             --nsg-name "${{ steps.infra.outputs.nsg_name }}" \
+#             --name "${{ steps.ssh_rule.outputs.rule_name }}" || true
+
+#       - name: Remove local private key
+#         if: always()
+#         shell: bash
+#         run: rm -f "$HOME/.ssh/formflow"
