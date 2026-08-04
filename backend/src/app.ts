@@ -19,25 +19,26 @@ const allowedOrigins = [
 
 app.use(
   cors({
-    origin: (origin, callback) => {
-      if (!origin) {
-        return callback(null, true);
-      }
+    origin: "*",
+    // (origin, callback) => {
+    //   if (!origin) {
+    //     return callback(null, true);
+    //   }
 
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
+    //   if (allowedOrigins.includes(origin)) {
+    //     return callback(null, true);
+    //   }
 
-      console.error(
-        `CORS blocked request from origin: ${origin}`
-      );
+    //   console.error(
+    //     `CORS blocked request from origin: ${origin}`
+    //   );
 
-      return callback(
-        new Error(
-          `Not allowed by CORS: ${origin}`
-        )
-      );
-    },
+    //   return callback(
+    //     new Error(
+    //       `Not allowed by CORS: ${origin}`
+    //     )
+    //   );
+    // },
 
     credentials: true,
 
