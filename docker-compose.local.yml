@@ -2,7 +2,7 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    container_name: captstone-db
+    container_name: capstone-db
     restart: unless-stopped
 
     environment:
@@ -17,13 +17,13 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d captstone_db"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d capstone_db"]
       interval: 10s
       timeout: 5s
       retries: 5
 
     networks:
-      - captstone-network
+      - capstone-network
 
 
   backend:
@@ -31,7 +31,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
 
-    container_name: captstone-backend
+    container_name: capstone-backend
     restart: unless-stopped
 
     depends_on:
@@ -42,7 +42,7 @@ services:
 
     environment:
       NODE_ENV: development
-      DATABASE_URL: postgresql://postgres:postgres123@postgres:5432/captstone_db
+      DATABASE_URL: postgresql://postgres:postgres123@postgres:5432/capstone_db
       JWT_SECRET: de27a0e9b4f5ff11842af66d82b7884e9e58a8b372
       PORT: 5000
 
@@ -50,7 +50,7 @@ services:
       - "5000"
 
     networks:
-      - captstone-network
+      - capstone-network
 
 
   frontend:
@@ -61,7 +61,7 @@ services:
       args:
         NEXT_PUBLIC_API_URL: /api
 
-    container_name: captstone-frontend
+    container_name: capstone-frontend
     restart: unless-stopped
 
     depends_on:
@@ -75,7 +75,7 @@ services:
       - "3000"
 
     networks:
-      - captstone-network
+      - capstone-network
 
 
   nginx:
@@ -83,7 +83,7 @@ services:
       context: ./nginx
       dockerfile: Dockerfile
 
-    container_name: captstone-nginx
+    container_name: capstone-nginx
     restart: unless-stopped
 
     depends_on:
@@ -94,7 +94,7 @@ services:
       - "80:80"
 
     networks:
-      - captstone-network
+      - capstone-network
 
 
 volumes:
@@ -102,7 +102,7 @@ volumes:
 
 
 networks:
-  captstone-network:
+  capstone-network:
     driver: bridge
 
     # docker compose -f docker-compose.local.yml down
