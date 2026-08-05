@@ -25,8 +25,3 @@ variable "ssh_public_key" {
   sensitive = true
 }
 
-variable "admin_ip" {
-  description = "IP address of the admin machine"
-  type        = string
-  sensitive   = false
-}
