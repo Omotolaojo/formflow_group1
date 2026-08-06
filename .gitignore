@@ -67,3 +67,5 @@ crash.log
 crash.*.log
 
 /dist-seed/
+
+deploy-v2.yml
