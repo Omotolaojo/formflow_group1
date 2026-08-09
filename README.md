@@ -34,24 +34,45 @@ The primary objectives of this project were to:
 ## 🏗 Project Architecture
 
 ```text
-Internet
-│
-▼
-Linux Virtual Machine
-│
-├───────────────┐
-│ Docker Engine │
-└──────┬────────┘
-│
-Docker Compose
-│
-├─────────────────────────┐
-│ Frontend Container      │
-├─────────────────────────┤
-│ Backend Container       │
-├─────────────────────────┤
-│ PostgreSQL Database     │
-└─────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           GITHUB REPOSITORY                                 │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌──────────────────┐    │
+│  │  Frontend   │  │   Backend   │  │  Dockerfiles│  │  docker-compose  │    │
+│  │    Code     │  │    Code     │  │             │  │       .yml       │    │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └──────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        GITHUB ACTIONS (CI/CD)                               │
+│                                                                             │
+│  1. Build Frontend Image    2. Build Backend Image    3. Push to Docker Hub │
+│     (versioned tag)             (versioned tag)          (with tags)        │
+│                                                                             │
+│  4. SSH into VM    5. Pull images    6. Update docker-compose    7. Deploy  │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          LINUX VM (Ubuntu)                                  │
+│                                                                             │
+│  ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐  │
+│  │  formflow-frontend  │  │  formflow-backend   │  │   formflow-db       │  │
+│  │  (NextJS + Nginx)   │  │  (Node.js/Express)  │  │   (PostgreSQL)      │  │
+│  │    Port 80          │  │    Port 5000        │  │    Port 5432        │  │
+│  └─────────────────────┘  └─────────────────────┘  └─────────────────────┘  │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                        Docker Network: formflow-net                 │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                        Persistent Volume: pgdata                    │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+                          Public IP:Port 80 (External Access)
 ```
 
 The application follows a **3-tier architecture**, where each component performs a dedicated responsibility:
