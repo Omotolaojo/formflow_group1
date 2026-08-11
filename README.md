@@ -229,6 +229,150 @@ Every successful push triggers the GitHub Actions workflow, which automatically:
 7. Verifies that deployment completed successfully
 
 ---
+## Prerequisites
+
+- Git
+- Docker with Docker Compose
+- Node.js and npm (for local application development)
+- Terraform and Azure CLI (for Azure provisioning)
+
+Verify the tooling:
+
+```bash
+git --version
+docker --version
+docker compose version
+node --version
+npm --version
+terraform --version
+az --version
+```
+
+## Getting Started
+
+Clone the repository and enter the project directory:
+
+```bash
+git clone https://github.com/Omotolaojo/formflow_group1.git
+cd formflow_group1
+```
+
+Configure the environment files in `deployment/` using `.env.example` as a reference. Do not commit credentials or production values.
+
+Start the local stack:
+
+```bash
+docker compose -f docker-compose.local.yml up --build
+```
+
+To run it in the background:
+
+```bash
+docker compose -f docker-compose.local.yml up -d --build
+```
+
+Useful local commands:
+
+```bash
+# Check services
+docker compose -f docker-compose.local.yml ps
+
+# Follow logs
+docker compose -f docker-compose.local.yml logs -f
+
+# Stop the stack
+docker compose -f docker-compose.local.yml down
+```
+
+## Production Deployment
+
+The production stack is defined in `docker-compose.prod.yml`. It includes Nginx, frontend, backend, PostgreSQL, persistent storage, health checks, isolated networks, and `no-new-privileges` security settings.
+
+```bash
+# Start or rebuild production services
+docker compose -f docker-compose.prod.yml up -d --build
+
+# Check service status
+docker compose -f docker-compose.prod.yml ps
+
+# Follow logs
+docker compose -f docker-compose.prod.yml logs -f
+
+# Stop the stack
+docker compose -f docker-compose.prod.yml down
+```
+
+## Infrastructure Provisioning
+
+Azure resources are defined in `Infrastructure/terraform/`, including provider configuration, networking, subnets, network security groups, virtual machines, variables, and outputs.
+
+```bash
+cd Infrastructure/terraform
+
+terraform init
+terraform fmt -recursive
+terraform validate
+terraform plan
+terraform apply
+```
+
+Destroy only the resources managed by this Terraform configuration when they are no longer needed:
+
+```bash
+terraform destroy
+```
+
+## Health Checks
+
+| Service | Health check |
+| --- | --- |
+| PostgreSQL | `pg_isready` |
+| Backend | `/api/health` |
+| Frontend | HTTP check against the local service |
+| Nginx | `/healthz` |
+
+Docker Compose uses these health states to manage startup dependencies.
+
+## CI/CD and Collaboration
+
+GitHub Actions workflows are stored in `.github/workflows/`:
+
+- `ci.yml` validates changes through dependency installation, builds/tests, and application checks.
+- `deploy.yml` deploys approved changes to the target environment.
+
+The recommended branch flow is:
+
+```text
+feature/* -> dev -> pull request + review -> main -> deployment
+```
+
+Keep `main` protected and use reviewed pull requests for production-bound changes.
+
+## Security Notes
+
+- Do not commit passwords, database credentials, JWT secrets, API keys, Azure credentials, SSH keys, or Docker Hub credentials.
+- Supply deployment secrets through GitHub Actions Secrets, Azure Key Vault, or another approved secret-management system.
+- Keep production and development configuration separate.
+- Run `terraform plan` and review the output before applying infrastructure changes.
+
+## Troubleshooting
+
+```bash
+# Inspect running containers
+docker ps
+
+# Review a production service log
+docker compose -f docker-compose.prod.yml logs backend
+
+# Inspect Nginx, backend, and frontend logs for 502 errors
+docker compose -f docker-compose.prod.yml logs nginx backend frontend
+
+# Verify Azure authentication
+az account show
+```
+
+If the backend cannot connect to PostgreSQL, check the database container health, database credentials, `DATABASE_URL`, and Docker network configuration. If Nginx returns `502 Bad Gateway`, verify that the backend or frontend upstream service is healthy and reachable on its configured network.
+
 
 ## 🏷 Image Versioning Strategy
 
@@ -380,24 +524,37 @@ Potential improvements include:
 
 ---
 
-## 👥 Team
+## 👥 Contributors
 
-This project was completed collaboratively as part of the Cloud & DevOps Bootcamp Capstone Project.
-
+This project was completed collaboratively as part of the Cloud & DevOps Capstone Project.
+1. Adekunle Abowaba
+2. Angel Alabor
+3. Benjamin Victor Ategwu
+4. Chima Marcel Awunor
+5. Ebube Olisa
+6. Francis Quansah
+7. Grace Ndeezia
+8. Judith Durumezuo
+9. Ojo Favour Omotola
+10. Makanjuola Oyekola
+11. Oladele Abass
+12. Osarietinmen Odobo
+13. Olowolafe Tolulope
+14. Olayenikan Michael
+15. Nnamani David
 Each team member contributed to different aspects of the solution, including infrastructure design, containerization, CI/CD automation, deployment, testing, documentation, and troubleshooting.
 
 ---
 
 ## 📜 License
 
-This project was developed for educational purposes as part of the Cloud & DevOps Bootcamp Capstone Project.
+This project was developed for educational purposes as part of Techcrush Cohort7 Cloud & DevOps Capstone Project.
 
 ---
 
 ## ⭐ Acknowledgements
 
-Special thanks to the Cloud & DevOps Bootcamp facilitators for providing the project scenario and guidance throughout the capstone exercise.
+Special thanks to Techcrush facilitators and Tutor Temi Komolafe for providing the project scenario and guidance throughout the capstone exercise.
 
 ---
 
-> **"Automation reduces human error, versioning provides confidence, and documentation ensures continuity."**
