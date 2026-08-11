@@ -1,4 +1,4 @@
-# FormFlow Application - Dockerized 3-Tier Application with CI/CD Pipeline [THIS README IS SUBJECT TO CHANGES]
+# FormFlow Application - Dockerized 3-Tier Application with CI/CD Pipeline
 
 > A production-ready demonstration of a Dockerized three-tier application with automated Continuous Integration and Continuous Deployment (CI/CD) using GitHub Actions, Docker Hub, and a Linux Virtual Machine.
 
